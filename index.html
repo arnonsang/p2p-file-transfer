@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>P2P File Transfer</title>
+    <meta
+      name="description"
+      content="P2P file transfer application for seamless sharing of files with a peer-to-peer connection."
+    />
+    <meta
+      name="keywords"
+      content="file transfer, P2P, peer-to-peer, file sharing, secure file transfer"
+    />
+    <meta name="author" content="Arnon Sang-ngern" />
+    <meta property="og:title" content="P2P File Transfer" />
+    <meta
+      property="og:description"
+      content="Seamlessly send and receive files with a secure peer-to-peer connection."
+    />
+    <meta property="og:image" content="android-chrome-192x192.png" />
+    <meta property="og:url" content="https://p2pfile.iamickdev.com" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:creator" content="@iamickdev" />
+    <meta name="twitter:title" content="P2P File Transfer" />
+    <meta
+      name="twitter:description"
+      content="Send and receive files securely with a peer-to-peer connection."
+    />
+    <meta name="twitter:image" content="android-chrome-192x192.png" />
+
+    <script src="https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <link
+      href="https://cdn.jsdelivr.net/npm/daisyui@3.9.2/dist/full.css"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/js/all.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  </head>
+  <body class="flex flex-col min-h-screen bg-gray-100">
+    <!-- Header -->
+    <header class="bg-black text-white text-center py-4 shadow-md">
+      <h1 class="text-2xl font-bold">P2P File Transfer</h1>
+    </header>
+    <main class="flex-grow container mx-auto p-4">
+      <!-- Main Content -->
+      <div class="max-w-2xl mx-auto card bg-base-100 shadow-xl">
+        <div class="card-body">
+          <!-- Connection Status -->
+          <h2 class="text-lg text-center font-semibold mb-2">
+            Send or Receive Files
+          </h2>
+
+          <div class="mb-6">
+            <div class="flex items-center gap-2 mb-4">
+              <div id="connection-status" class="badge badge-sm"></div>
+              <span id="status-text" class="text-sm">Initializing...</span>
+            </div>
+            <div class="bg-base-200 p-4 rounded-box">
+              <h2 class="text-lg font-semibold mb-2">
+                <i class="fas fa-id-badge mr-2"></i>Your Peer ID
+              </h2>
+              <div class="flex gap-2">
+                <code id="peer-id" class="flex-1 input input-bordered"
+                  >Generating...</code
+                >
+                <button onclick="copyPeerId()" class="btn btn-primary">
+                  <i class="fas fa-copy"></i>
+                </button>
+              </div>
+              <i class="text-xs text-gray-400 mt-2"
+                >Share this Peer ID with your friend to connect and share
+                files.</i
+              >
+            </div>
+          </div>
+
+          <!-- Connection Input -->
+          <div class="mb-6">
+            <div class="flex gap-2">
+              <input
+                type="text"
+                id="remote-id"
+                class="flex-1 input input-bordered"
+                placeholder="Enter Receiver's Peer ID"
+              />
+              <button
+                onclick="connect()"
+                class="btn btn-success"
+                id="connect-button"
+              >
+                <i class="fas fa-link mr-2"></i>Connect
+              </button>
+              <!-- disconnect button -->
+              <button
+                onclick="disconnect()"
+                class="btn btn-error hidden"
+                id="disconnect-button"
+              >
+                <i class="fas fa-unlink mr-2"></i>Disconnect
+              </button>
+            </div>
+          </div>
+
+          <!-- File Transfer Section -->
+          <div class="mb-6">
+            <div class="divider hidden" id="file-transfer-header-divider"></div>
+            <div
+              class="flex items-center gap-2 mb-4 hidden"
+              id="file-transfer-header"
+            >
+              <input
+                type="file"
+                id="file-input"
+                multiple
+                class="hidden"
+                onchange="updateFileList()"
+              />
+              <label for="file-input" class="btn btn-primary flex-1">
+                <i class="fas fa-upload mr-2"></i>Choose Files
+              </label>
+              <button
+                id="send-button"
+                onclick="sendFiles()"
+                class="btn btn-accent hidden flex-1"
+              >
+                <i class="fas fa-paper-plane mr-2"></i>Send Files
+              </button>
+            </div>
+            <div id="selected-files" class="text-sm mb-2"></div>
+
+            <!-- Progress bar -->
+            <div id="progress-container" class="hidden">
+              <div class="flex justify-between items-center mb-2">
+                <span class="text-sm">
+                  <i class="fas fa-spinner fa-spin mr-2"></i>Transfer Progress
+                </span>
+                <span id="progress" class="text-sm">0%</span>
+              </div>
+              <progress
+                id="progress-bar"
+                class="progress progress-primary"
+                value="0"
+                max="100"
+              ></progress>
+            </div>
+          </div>
+
+          <!-- Sent History -->
+          <div id="sent-history-container" class="hidden">
+            <div class="divider"></div>
+            <h3 class="text-lg font-semibold mb-3">
+              <i class="fas fa-history mr-2"></i>Sent History
+            </h3>
+            <ul id="sent-history" class="menu bg-base-200 rounded-box"></ul>
+          </div>
+
+          <!-- Received Files -->
+          <div id="received-files-container" class="hidden">
+            <div class="divider"></div>
+            <h3 class="text-lg font-semibold mb-3">
+              <i class="fas fa-folder-open mr-2"></i>Received Files
+            </h3>
+            <ul id="file-list" class="menu bg-base-200 rounded-box"></ul>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-black text-white text-center py-3 mt-4">
+      &copy; <span id="year"></span> Made with ❤️ by
+      <a href="https://www.iamickdev.com" target="_blank" class="link"
+        >Arnon Sang-ngern</a
+      >
+    </footer>
+
+    <script>
+      const CHUNK_SIZE = 16 * 1024;
+      const peer = new Peer();
+      let conn;
+      let receivedSize = 0;
+      let fileSize = 0;
+      let myPID;
+
+      document.getElementById("year").textContent = new Date().getFullYear();
+
+      // Updated file list management
+      function updateFileList() {
+        const files = document.getElementById("file-input").files;
+        const fileList = document.getElementById("selected-files");
+        const sendButton = document.getElementById("send-button");
+
+        if (files.length > 0) {
+          fileList.innerHTML = Array.from(files)
+            .map(
+              (file) =>
+                `<div class="text-sm"><i class="fas fa-file mr-2"></i>${
+                  file.name
+                } (${formatFileSize(file.size)})</div>`
+            )
+            .join("");
+          sendButton.classList.remove("hidden");
+        } else {
+          fileList.innerHTML = "";
+          sendButton.classList.add("hidden");
+        }
+      }
+
+      // Updated progress management
+      function showProgress(show) {
+        const progressContainer = document.getElementById("progress-container");
+        if (show) {
+          progressContainer.classList.remove("hidden");
+          document
+            .getElementById("file-transfer-header")
+            .classList.add("hidden");
+          document
+            .getElementById("file-transfer-header-divider")
+            .classList.add("hidden");
+        } else {
+          progressContainer.classList.add("hidden");
+          document
+            .getElementById("file-transfer-header")
+            .classList.remove("hidden");
+          document
+            .getElementById("file-transfer-header-divider")
+            .classList.remove("hidden");
+        }
+      }
+
+      function updateProgress(percentage) {
+        document.getElementById("progress").innerText = `${percentage}%`;
+        document.getElementById("progress-bar").style.width = `${percentage}%`;
+      }
+
+      // Updated send files function
+      async function sendFiles() {
+        const fileInput = document.getElementById("file-input");
+        const files = fileInput.files;
+
+        if (!files.length || !conn) {
+          Swal.fire({
+            icon: "error",
+            title: "Oops...",
+            text: "Please select files and connect first!",
+            timer: 3000,
+            showConfirmButton: false,
+          });
+          return;
+        }
+
+        showProgress(true);
+
+        for (const file of files) {
+          try {
+            updateStatus(`Sending ${file.name}...`, true);
+            const arrayBuffer = await file.arrayBuffer();
+
+            conn.send({
+              type: "metadata",
+              name: file.name,
+              size: file.size,
+              mimeType: file.type,
+            });
+
+            let offset = 0;
+            while (offset < arrayBuffer.byteLength) {
+              const chunk = arrayBuffer.slice(offset, offset + CHUNK_SIZE);
+              conn.send({
+                type: "chunk",
+                data: chunk,
+              });
+              offset += chunk.byteLength;
+              const progress = (
+                (offset / arrayBuffer.byteLength) *
+                100
+              ).toFixed(2);
+              updateProgress(progress);
+
+              await new Promise((resolve) => setTimeout(resolve, 1));
+            }
+
+            // After successful send:
+            Array.from(files).forEach((file) => {
+              addToSentHistory(file.name, file.size);
+            });
+
+            conn.send({ type: "complete" });
+            updateStatus("File sent successfully!", true);
+          } catch (error) {
+            console.error("Error sending file:", error);
+            updateStatus("Error sending file", false);
+          }
+        }
+
+        // Clear file input and reset UI after sending
+        fileInput.value = "";
+        document.getElementById("selected-files").innerHTML = "";
+        document.getElementById("send-button").classList.add("hidden");
+        showProgress(false);
+        updateProgress(0);
+      }
+
+      // Updated receive handling
+      function handleReceiveData(data) {
+        try {
+          if (data.type === "metadata") {
+            currentFileName = data.name;
+            currentFileType = data.mimeType;
+            fileSize = data.size;
+            receivedSize = 0;
+            receivedChunks = [];
+            updateStatus(`Receiving ${data.name}...`, true);
+            showProgress(true);
+          } else if (data.type === "chunk") {
+            receivedChunks.push(data.data);
+            receivedSize += data.data.byteLength;
+            const progress = ((receivedSize / fileSize) * 100).toFixed(2);
+            updateProgress(progress);
+          } else if (data.type === "complete") {
+            const concatenatedChunks = new Uint8Array(receivedSize);
+            let offset = 0;
+            for (const chunk of receivedChunks) {
+              concatenatedChunks.set(new Uint8Array(chunk), offset);
+              offset += chunk.byteLength;
+            }
+
+            const blob = new Blob([concatenatedChunks], {
+              type: currentFileType || "application/octet-stream",
+            });
+            saveFile(blob, currentFileName);
+
+            updateStatus("File received successfully!", true);
+            showProgress(false);
+            updateProgress(0);
+            receivedChunks = [];
+            receivedSize = 0;
+            fileSize = 0;
+          }
+        } catch (error) {
+          console.error("Error receiving file:", error);
+          updateStatus("Error receiving file", false);
+          showProgress(false);
+        }
+      }
+
+      function updateStatus(status, connected = false) {
+        const statusDot = document.getElementById("connection-status");
+        const statusText = document.getElementById("status-text");
+
+        statusDot.className = `badge badge-sm ${
+          connected ? "badge-success" : "badge-warning"
+        }`;
+        statusText.textContent = status;
+      }
+
+      function copyPeerId() {
+        const peerId = document.getElementById("peer-id").textContent;
+        navigator.clipboard.writeText(peerId).then(() => {
+          Swal.fire({
+            icon: "success",
+            title: "Success",
+            text: "Peer ID copied to clipboard!",
+            timer: 3000,
+            showConfirmButton: false,
+          });
+        });
+      }
+
+      function formatFileSize(bytes) {
+        if (bytes === 0) return "0 Bytes";
+        const k = 1024;
+        const sizes = ["Bytes", "KB", "MB", "GB"];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+      }
+
+      function disconnect() {
+        if (conn) {
+          Swal.fire({
+            title: "Are you sure?",
+            text: "You want to disconnect from the current connection?",
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonColor: "#3085d6",
+            cancelButtonColor: "#d33",
+            confirmButtonText: "Yes, disconnect!",
+          }).then((result) => {
+            if (result.isConfirmed) {
+              conn.close();
+              location.reload();
+            }
+          });
+        }
+      }
+
+      function connect() {
+        const remoteId = document.getElementById("remote-id").value;
+        if (!remoteId) {
+          Swal.fire({
+            icon: "error",
+            title: "Oops...",
+            text: "Please enter a Peer ID to connect to!",
+            timer: 3000,
+            showConfirmButton: false,
+          });
+          return;
+        }
+
+        if (conn) {
+          conn.close();
+        }
+
+        if (remoteId === myPID) {
+          Swal.fire({
+            icon: "error",
+            title: "Oops...",
+            text: "You cannot connect to yourself!",
+            timer: 3000,
+            showConfirmButton: false,
+          });
+          return;
+        }
+
+        updateStatus("Connecting...", false);
+        conn = peer.connect(remoteId, {
+          reliable: true,
+        });
+        setupConnection();
+      }
+
+      function setupConnection() {
+        conn.on("open", () => {
+          updateStatus(`Connected to: ${conn.peer}`, true);
+          document
+            .getElementById("file-transfer-header")
+            .classList.remove("hidden");
+          document
+            .getElementById("file-transfer-header-divider")
+            .classList.remove("hidden");
+          document.getElementById("remote-id").value = conn.peer;
+          document.getElementById("remote-id").setAttribute("disabled", true);
+          document
+            .getElementById("disconnect-button")
+            .classList.remove("hidden");
+          document.getElementById("connect-button").classList.add("hidden");
+        });
+
+        conn.on("close", () => {
+          updateStatus("Connection closed", false);
+          Swal.fire({
+            icon: "info",
+            title: "Connection Closed",
+            text: "The connection has been closed.",
+            timer: 10000,
+            showConfirmButton: false,
+          }).then(() => {
+            location.reload();
+          });
+        });
+
+        conn.on("error", (err) => {
+          updateStatus(`Connection error: ${err.type}`, false);
+        });
+
+        conn.on("data", handleReceiveData);
+      }
+
+      function saveFile(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const container = document.getElementById("received-files-container");
+        const list = document.getElementById("file-list");
+
+        const listItem = document.createElement("li");
+        listItem.className = "flex flex-row justify-between items-center";
+
+        const fileInfo = document.createElement("div");
+        fileInfo.className = "flex items-center gap-2";
+        fileInfo.innerHTML = `
+                <i class="fas fa-file-download text-primary"></i>
+                <span>${filename}</span>
+            `;
+
+        const downloadLink = document.createElement("a");
+        downloadLink.href = url;
+        downloadLink.download = filename;
+        downloadLink.className = "btn btn-sm btn-primary";
+        downloadLink.innerHTML = '<i class="fas fa-download"></i>';
+
+        listItem.appendChild(fileInfo);
+        listItem.appendChild(downloadLink);
+        list.appendChild(listItem);
+
+        // Show container if hidden
+        if (container.classList.contains("hidden")) {
+          container.classList.remove("hidden");
+        }
+      }
+
+      function addToSentHistory(filename, size) {
+        const container = document.getElementById("sent-history-container");
+        const list = document.getElementById("sent-history");
+
+        const listItem = document.createElement("li");
+        listItem.className = "flex flex-row justify-between items-center";
+        listItem.innerHTML = `
+                <div class="flex items-center gap-2 py-2">
+                    <i class="fas fa-file-export text-secondary"></i>
+                    <span>${filename}</span>
+                    <span class="text-xs opacity-75">${formatFileSize(
+                      size
+                    )}</span>
+                </div>
+                <div class="flex badge badge-success gap-2">
+                    <i class="fas fa-check"></i>
+                    <span>Sent</span>
+                </div>
+            `;
+
+        list.appendChild(listItem);
+
+        // Show container if hidden
+        if (container.classList.contains("hidden")) {
+          container.classList.remove("hidden");
+        }
+      }
+
+      peer.on("open", (id) => {
+        document.getElementById("peer-id").innerText = id;
+        myPID = id;
+        updateStatus("Ready to connect");
+      });
+
+      peer.on("error", (err) => {
+        updateStatus(`Error: ${err.type}`, false);
+        console.error(err);
+      });
+
+      peer.on("connection", (incomingConn) => {
+        conn = incomingConn;
+        updateStatus(`Incoming connection from: ${conn.peer}`, true);
+        setupConnection();
+      });
+    </script>
+  </body>
+</html>
