@@ -64,6 +64,22 @@
             </div>
             <div class="bg-base-200 p-4 rounded-box">
               <h2 class="text-lg font-semibold mb-2">
+                <i class="fas fa-user mr-2"></i>Your Nickname
+              </h2>
+              <div class="flex gap-2 mb-4">
+                <input
+                  type="text"
+                  id="nickname-input"
+                  class="flex-1 input input-bordered"
+                  placeholder="Enter your nickname"
+                  maxlength="30"
+                  readonly
+                />
+                <button onclick="changeNickname()" class="btn btn-secondary">
+                  <i class="fas fa-edit"></i>
+                </button>
+              </div>
+              <h2 class="text-lg font-semibold mb-2">
                 <i class="fas fa-id-badge mr-2"></i>Your Peer ID
               </h2>
               <div class="flex gap-2">
@@ -72,17 +88,17 @@
                 >
                 <button
                   onclick="copyPeerId()"
-                  class="btn btn-primary"
-                  title="Copy Peer ID and share with your friend"
+                  class="btn btn-primary hidden"
+                  id="copy-button"
                 >
-                  <i class="fas fa-copy"></i> <span>Copy</span>
+                  <i class="fas fa-copy"></i>
                 </button>
                 <button
                   onclick="copyShareLink()"
-                  class="btn btn-secondary"
-                  title="Copy receiver link that will auto-connect to your Peer ID"
+                  class="btn btn-secondary hidden"
+                  id="share-button"
                 >
-                  <i class="fas fa-share-alt"></i> <span>Share</span>
+                  <i class="fas fa-share-alt"></i>
                 </button>
               </div>
               <i class="text-xs text-gray-400 mt-2"
@@ -156,6 +172,9 @@
 
             <!-- Progress bar -->
             <div id="progress-container" class="hidden">
+              <div id="progress-info" class="mb-3">
+                <!-- File info will be inserted here -->
+              </div>
               <div class="flex justify-between items-center mb-2">
                 <span class="text-sm">
                   <i class="fas fa-spinner fa-spin mr-2"></i>Transfer Progress
@@ -164,10 +183,13 @@
               </div>
               <progress
                 id="progress-bar"
-                class="progress progress-primary"
+                class="progress progress-primary w-full"
                 value="0"
                 max="100"
               ></progress>
+              <p class="text-xs text-red-400 mt-2">
+                ⚠️ To ensure successful file transfer, please keep this tab open and avoid refreshing the page.
+              </p>
             </div>
           </div>
 
@@ -207,10 +229,11 @@
       let receivedSize = 0;
       let fileSize = 0;
       let myPID;
+      let myNickname = "";
+      let peerNickname = "";
 
       document.getElementById("year").textContent = new Date().getFullYear();
 
-      // Updated file list management
       function updateFileList() {
         const files = document.getElementById("file-input").files;
         const fileList = document.getElementById("selected-files");
@@ -232,8 +255,7 @@
         }
       }
 
-      // Updated progress management
-      function showProgress(show) {
+      function showProgress(show, fileName = "", fileSize = 0) {
         const progressContainer = document.getElementById("progress-container");
         if (show) {
           progressContainer.classList.remove("hidden");
@@ -243,6 +265,18 @@
           document
             .getElementById("file-transfer-header-divider")
             .classList.add("hidden");
+
+          const progressInfo = document.getElementById("progress-info");
+          if (fileName && fileSize) {
+            progressInfo.innerHTML = `
+        <div class="flex items-center gap-2">
+          <i class="fas fa-file text-primary"></i>
+          <span class="font-medium">${fileName}</span>
+          <span class="text-sm opacity-75">(${formatFileSize(fileSize)})</span>
+        </div>
+      `;
+      document.getElementById("selected-files").innerHTML = "";
+          }
         } else {
           progressContainer.classList.add("hidden");
           document
@@ -259,7 +293,6 @@
         document.getElementById("progress-bar").style.width = `${percentage}%`;
       }
 
-      // Updated send files function
       async function sendFiles() {
         const fileInput = document.getElementById("file-input");
         const files = fileInput.files;
@@ -275,11 +308,10 @@
           return;
         }
 
-        showProgress(true);
-
         for (const file of files) {
           try {
             updateStatus(`Sending ${file.name}...`, true);
+            showProgress(true, file.name, file.size);
             const arrayBuffer = await file.arrayBuffer();
 
             conn.send({
@@ -306,28 +338,22 @@
               await new Promise((resolve) => setTimeout(resolve, 1));
             }
 
-            // After successful send:
-            Array.from(files).forEach((file) => {
-              addToSentHistory(file.name, file.size);
-            });
-
+            addToSentHistory(file.name, file.size);
             conn.send({ type: "complete" });
             updateStatus("File sent successfully!", true);
           } catch (error) {
             console.error("Error sending file:", error);
-            updateStatus("Error sending file", false, true);
+            updateStatus("Error sending file", false);
           }
         }
 
-        // Clear file input and reset UI after sending
         fileInput.value = "";
         document.getElementById("selected-files").innerHTML = "";
         document.getElementById("send-button").classList.add("hidden");
         showProgress(false);
         updateProgress(0);
       }
-
-      // Updated receive handling
+      
       function handleReceiveData(data) {
         try {
           if (data.type === "metadata") {
@@ -337,7 +363,7 @@
             receivedSize = 0;
             receivedChunks = [];
             updateStatus(`Receiving ${data.name}...`, true);
-            showProgress(true);
+            showProgress(true, data.name, data.size);
           } else if (data.type === "chunk") {
             receivedChunks.push(data.data);
             receivedSize += data.data.byteLength;
@@ -354,7 +380,7 @@
             const blob = new Blob([concatenatedChunks], {
               type: currentFileType || "application/octet-stream",
             });
-            saveFile(blob, currentFileName);
+            saveFile(blob, currentFileName, fileSize); // Pass fileSize to saveFile
 
             updateStatus("File received successfully!", true);
             showProgress(false);
@@ -364,8 +390,8 @@
             fileSize = 0;
           }
         } catch (error) {
-          console.error("Error receiving file:", error, true);
-          updateStatus("Error receiving file", false, true);
+          console.error("Error receiving file:", error);
+          updateStatus("Error receiving file", false);
           showProgress(false);
         }
       }
@@ -459,7 +485,15 @@
 
       function setupConnection() {
         conn.on("open", () => {
-          updateStatus(`Connected to: ${conn.peer}`, true);
+          // Send my nickname as soon as connection opens
+          const myNick =
+            document.getElementById("nickname-input").value.trim() || "Someone";
+          conn.send({
+            type: "nickname",
+            nickname: myNick,
+          });
+
+          updateStatus(`Connected to: ${peerNickname || conn.peer}`, true);
           document
             .getElementById("file-transfer-header")
             .classList.remove("hidden");
@@ -471,8 +505,8 @@
           document
             .getElementById("disconnect-button")
             .classList.remove("hidden");
-          document.getElementById("disconnect-ps").classList.add("hidden");
           document.getElementById("connected-ps").classList.remove("hidden");
+          document.getElementById("disconnect-ps").classList.add("hidden");
           document.getElementById("connect-button").classList.add("hidden");
         });
 
@@ -493,23 +527,33 @@
           updateStatus(`Connection error: ${err.type}`, false);
         });
 
-        conn.on("data", handleReceiveData);
+        conn.on("data", (data) => {
+          if (data.type === "nickname") {
+            peerNickname = data.nickname;
+            updatePeerNickname();
+          } else {
+            handleReceiveData(data);
+          }
+        });
       }
 
-      function saveFile(blob, filename) {
+      function saveFile(blob, filename, fileSize) {
         const url = URL.createObjectURL(blob);
         const container = document.getElementById("received-files-container");
         const list = document.getElementById("file-list");
 
         const listItem = document.createElement("li");
-        listItem.className = "flex flex-row justify-between items-center";
+        listItem.className = "flex flex-row justify-between items-center py-2";
 
         const fileInfo = document.createElement("div");
-        fileInfo.className = "flex items-center gap-2";
+        fileInfo.className = "flex items-center gap-2 flex-1";
         fileInfo.innerHTML = `
-                <i class="fas fa-file-download text-primary"></i>
-                <span>${filename}</span>
-            `;
+    <i class="fas fa-file-download text-primary"></i>
+    <div class="flex flex-col">
+      <span class="font-medium">${filename}</span>
+      <span class="text-xs opacity-75">${formatFileSize(fileSize)}</span>
+    </div>
+  `;
 
         const downloadLink = document.createElement("a");
         downloadLink.href = url;
@@ -558,7 +602,12 @@
       function handleUrlParams() {
         const urlParams = new URLSearchParams(window.location.search);
         const connectToPeer = urlParams.get("connect");
+        const senderNickname = urlParams.get("from");
         if (connectToPeer) {
+          if (senderNickname) {
+            peerNickname = decodeURIComponent(senderNickname);
+            updatePeerNickname();
+          }
           // Wait for peer to be ready before connecting
           peer.on("open", () => {
             document.getElementById("remote-id").value = connectToPeer;
@@ -570,8 +619,11 @@
       // Create and copy share link
       function copyShareLink() {
         const peerId = document.getElementById("peer-id").textContent;
+        const nickname =
+          document.getElementById("nickname-input").value.trim() || "Someone";
         const currentUrl = new URL(window.location.href);
         currentUrl.searchParams.set("connect", peerId);
+        currentUrl.searchParams.set("from", encodeURIComponent(nickname));
         navigator.clipboard.writeText(currentUrl.toString()).then(() => {
           Swal.fire({
             icon: "success",
@@ -583,11 +635,89 @@
         });
       }
 
-      // Call handleUrlParams when the page loads
-      document.addEventListener("DOMContentLoaded", handleUrlParams);
+      function updatePeerNickname() {
+        const statusText = document.getElementById("status-text");
+        if (conn && conn.open) {
+          statusText.textContent = `Connected to: ${peerNickname || conn.peer}`;
+        }
+      }
 
+      async function promptForNickname() {
+        const savedNickname = localStorage.getItem("userNickname");
+
+        if (!savedNickname) {
+          const { value: nickname } = await Swal.fire({
+            title: "Enter your nickname",
+            input: "text",
+            inputPlaceholder: "Your nickname",
+            inputAttributes: {
+              maxlength: 30,
+            },
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            confirmButtonText: "Continue",
+            customClass: {
+              confirmButton: "btn btn-primary",
+            },
+            buttonsStyling: false,
+            inputValidator: (value) => {
+              if (!value || !value.trim()) {
+                return "Please enter a nickname!";
+              }
+            },
+          });
+
+          if (nickname) {
+            localStorage.setItem("userNickname", nickname);
+            document.getElementById("nickname-input").value = nickname;
+            return nickname;
+          }
+        } else {
+          document.getElementById("nickname-input").value = savedNickname;
+          return savedNickname;
+        }
+      }
+
+      async function changeNickname() {
+        const { value: newNickname } = await Swal.fire({
+          title: "Change your nickname",
+          input: "text",
+          inputValue: document.getElementById("nickname-input").value,
+          inputPlaceholder: "Your new nickname",
+          inputAttributes: {
+            maxlength: 30,
+          },
+          showCancelButton: true,
+          confirmButtonText: "Change",
+          customClass: {
+            confirmButton: "btn btn-primary",
+            cancelButton: "btn btn-ghost ml-2",
+          },
+          buttonsStyling: false,
+          inputValidator: (value) => {
+            if (!value || !value.trim()) {
+              return "Please enter a nickname!";
+            }
+          },
+        });
+
+        if (newNickname) {
+          localStorage.setItem("userNickname", newNickname);
+          document.getElementById("nickname-input").value = newNickname;
+
+          // If connected, send new nickname to peer
+          if (conn && conn.open) {
+            conn.send({
+              type: "nickname",
+              nickname: newNickname,
+            });
+          }
+        }
+      }
       peer.on("open", (id) => {
         document.getElementById("peer-id").innerText = id;
+        document.getElementById("copy-button").classList.remove("hidden");
+        document.getElementById("share-button").classList.remove("hidden");
         myPID = id;
         updateStatus("Ready to connect");
       });
@@ -601,6 +731,11 @@
         conn = incomingConn;
         updateStatus(`Incoming connection from: ${conn.peer}`, true);
         setupConnection();
+      });
+
+      document.addEventListener("DOMContentLoaded", async () => {
+        await promptForNickname();
+        handleUrlParams();
       });
     </script>
   </body>
