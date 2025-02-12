@@ -41,7 +41,9 @@
   </head>
   <body class="flex flex-col min-h-screen bg-gray-100">
     <!-- Header -->
-    <header class="bg-black text-white text-center py-4 shadow-md">
+    <header
+      class="bg-black text-white text-center py-4 shadow-md flex items-center justify-center gap-4"
+    >
       <h1 class="text-2xl font-bold">P2P File Transfer</h1>
     </header>
     <main class="flex-grow container mx-auto p-4">
@@ -49,7 +51,9 @@
       <div class="max-w-2xl mx-auto card bg-base-100 shadow-xl">
         <div class="card-body">
           <!-- Connection Status -->
-          <h2 class="text-lg text-center font-semibold mb-2">
+          <h2
+            class="text-lg text-center font-semibold mb-4 flex items-center justify-center gap-2"
+          >
             Send or Receive Files
           </h2>
 
@@ -66,13 +70,24 @@
                 <code id="peer-id" class="flex-1 input input-bordered"
                   >Generating...</code
                 >
-                <button onclick="copyPeerId()" class="btn btn-primary">
-                  <i class="fas fa-copy"></i>
+                <button
+                  onclick="copyPeerId()"
+                  class="btn btn-primary"
+                  title="Copy Peer ID and share with your friend"
+                >
+                  <i class="fas fa-copy"></i> <span>Copy</span>
+                </button>
+                <button
+                  onclick="copyShareLink()"
+                  class="btn btn-secondary"
+                  title="Copy receiver link that will auto-connect to your Peer ID"
+                >
+                  <i class="fas fa-share-alt"></i> <span>Share</span>
                 </button>
               </div>
               <i class="text-xs text-gray-400 mt-2"
-                >Share this Peer ID with your friend to connect and share
-                files.</i
+                >Share this Peer ID or share link with your friend to connect
+                and share files.</i
               >
             </div>
           </div>
@@ -85,11 +100,13 @@
                 id="remote-id"
                 class="flex-1 input input-bordered"
                 placeholder="Enter Receiver's Peer ID"
+                title="Enter your friend's Peer ID to connect and share files."
               />
               <button
                 onclick="connect()"
                 class="btn btn-success"
                 id="connect-button"
+                title="Connect to your friend's Peer ID to share files."
               >
                 <i class="fas fa-link mr-2"></i>Connect
               </button>
@@ -102,6 +119,12 @@
                 <i class="fas fa-unlink mr-2"></i>Disconnect
               </button>
             </div>
+            <i id="disconnect-ps" class="text-xs text-gray-400 mt-2"
+              >Enter your friend's Peer ID to connect and share files.</i
+            >
+            <i id="connected-ps" class="text-xs text-gray-400 mt-2 hidden"
+              >You are connected to a peer. File transfer is ready.</i
+            >
           </div>
 
           <!-- File Transfer Section -->
@@ -292,7 +315,7 @@
             updateStatus("File sent successfully!", true);
           } catch (error) {
             console.error("Error sending file:", error);
-            updateStatus("Error sending file", false);
+            updateStatus("Error sending file", false, true);
           }
         }
 
@@ -341,19 +364,19 @@
             fileSize = 0;
           }
         } catch (error) {
-          console.error("Error receiving file:", error);
-          updateStatus("Error receiving file", false);
+          console.error("Error receiving file:", error, true);
+          updateStatus("Error receiving file", false, true);
           showProgress(false);
         }
       }
 
-      function updateStatus(status, connected = false) {
+      function updateStatus(status, connected = false, error = false) {
         const statusDot = document.getElementById("connection-status");
         const statusText = document.getElementById("status-text");
 
         statusDot.className = `badge badge-sm ${
-          connected ? "badge-success" : "badge-warning"
-        }`;
+          connected ? "badge-success" : error ? "badge-error" : "badge-warning"
+        } ${error || !connected ? "animate-pulse" : ""}`;
         statusText.textContent = status;
       }
 
@@ -382,7 +405,7 @@
         if (conn) {
           Swal.fire({
             title: "Are you sure?",
-            text: "You want to disconnect from the current connection?",
+            text: "You want to disconnect from the current connection, you will not be able to send or receive files and peer ID will be reset.",
             icon: "warning",
             showCancelButton: true,
             confirmButtonColor: "#3085d6",
@@ -390,6 +413,8 @@
             confirmButtonText: "Yes, disconnect!",
           }).then((result) => {
             if (result.isConfirmed) {
+              //clear parameters and reload
+              window.history.replaceState({}, document.title, "/");
               conn.close();
               location.reload();
             }
@@ -446,6 +471,8 @@
           document
             .getElementById("disconnect-button")
             .classList.remove("hidden");
+          document.getElementById("disconnect-ps").classList.add("hidden");
+          document.getElementById("connected-ps").classList.remove("hidden");
           document.getElementById("connect-button").classList.add("hidden");
         });
 
@@ -528,6 +555,37 @@
         }
       }
 
+      function handleUrlParams() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const connectToPeer = urlParams.get("connect");
+        if (connectToPeer) {
+          // Wait for peer to be ready before connecting
+          peer.on("open", () => {
+            document.getElementById("remote-id").value = connectToPeer;
+            connect();
+          });
+        }
+      }
+
+      // Create and copy share link
+      function copyShareLink() {
+        const peerId = document.getElementById("peer-id").textContent;
+        const currentUrl = new URL(window.location.href);
+        currentUrl.searchParams.set("connect", peerId);
+        navigator.clipboard.writeText(currentUrl.toString()).then(() => {
+          Swal.fire({
+            icon: "success",
+            title: "Success",
+            text: "Share link copied to clipboard!",
+            timer: 3000,
+            showConfirmButton: false,
+          });
+        });
+      }
+
+      // Call handleUrlParams when the page loads
+      document.addEventListener("DOMContentLoaded", handleUrlParams);
+
       peer.on("open", (id) => {
         document.getElementById("peer-id").innerText = id;
         myPID = id;
@@ -535,7 +593,7 @@
       });
 
       peer.on("error", (err) => {
-        updateStatus(`Error: ${err.type}`, false);
+        updateStatus(`Error: ${err.type}`, false, true);
         console.error(err);
       });
 
