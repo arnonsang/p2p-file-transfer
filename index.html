@@ -38,6 +38,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/js/all.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   </head>
   <body class="flex flex-col min-h-screen bg-gray-100">
     <!-- Header -->
@@ -54,7 +55,8 @@
           <h2
             class="text-lg text-center font-semibold mb-4 flex items-center justify-center gap-2"
           >
-            Send or Receive Files <span id="username-header" class="hidden"></span>
+            Send or Receive Files
+            <span id="username-header" class="hidden"></span>
           </h2>
 
           <div class="mb-6">
@@ -107,6 +109,21 @@
               >
             </div>
           </div>
+
+          <!-- Connection QR Code -->
+          <div id="qrcode-container" class="hidden mb-6">
+            <div class="divider"></div>
+            <h6 class="text-lg font-semibold mb-3 text-center">
+              <i class="fas fa-qrcode mr-2"></i>Scan to Connect
+            </h6>
+            <div id="qrcode" class="flex justify-center"></div>
+
+            <div class="text-center mt-2">
+              <i class="text-xs text-gray-400">Show this QR code to your friend to connect to your Peer ID.</i>
+          </div>
+          <div class="divider"></div>
+
+        </div>
 
           <!-- Connection Input -->
           <div class="mb-6">
@@ -526,7 +543,9 @@
           });
 
           updateStatus(`Connected to: ${peerNickname || conn.peer}`, true);
-          document.getElementById("username-header").textContent = `with ${peerNickname || conn.peer}`;
+          document.getElementById("username-header").textContent = `with ${
+            peerNickname || conn.peer
+          }`;
           document.getElementById("username-header").classList.remove("hidden");
           document
             .getElementById("file-transfer-header")
@@ -542,6 +561,9 @@
           document.getElementById("connected-ps").classList.remove("hidden");
           document.getElementById("disconnect-ps").classList.add("hidden");
           document.getElementById("connect-button").classList.add("hidden");
+          document.getElementById("share-button").classList.add("hidden");
+          document.getElementById("copy-button").classList.add("hidden");
+          document.getElementById("qrcode-container").classList.add("hidden");
         });
 
         conn.on("close", () => {
@@ -673,7 +695,9 @@
         const statusText = document.getElementById("status-text");
         if (conn && conn.open) {
           statusText.textContent = `Connected to: ${peerNickname || conn.peer}`;
-          document.getElementById("username-header").textContent = `with ${peerNickname || conn.peer}`;
+          document.getElementById("username-header").textContent = `with ${
+            peerNickname || conn.peer
+          }`;
         } else {
           statusText.textContent = `Ready to connect`;
         }
@@ -752,6 +776,27 @@
           }
         }
       }
+
+      function generateQRCode() {
+        const peerId = document.getElementById("peer-id").textContent;
+        if (peerId && peerId !== "Generating...") {
+          const nickname =
+            document.getElementById("nickname-input").value.trim() || "Someone";
+          const currentUrl = new URL(window.location.href);
+          currentUrl.searchParams.set("connect", peerId);
+          currentUrl.searchParams.set("from", encodeURIComponent(nickname));
+
+          document.getElementById("qrcode").innerHTML = "";
+          new QRCode(document.getElementById("qrcode"), {
+            text: currentUrl.toString(),
+            width: 500,
+            height: 500,
+          });
+
+          document.getElementById("qrcode-container").classList.remove("hidden");
+        }
+      }
+
       peer.on("open", (id) => {
         document.getElementById("peer-id").innerText = id;
         document.getElementById("copy-button").classList.remove("hidden");
@@ -759,6 +804,7 @@
         window.onbeforeunload = handleBeforeUnload;
         myPID = id;
         updateStatus("Ready to connect");
+        generateQRCode();
       });
 
       peer.on("error", (err) => {
