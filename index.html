@@ -54,7 +54,7 @@
           <h2
             class="text-lg text-center font-semibold mb-4 flex items-center justify-center gap-2"
           >
-            Send or Receive Files
+            Send or Receive Files <span id="username-header" class="hidden"></span>
           </h2>
 
           <div class="mb-6">
@@ -526,6 +526,8 @@
           });
 
           updateStatus(`Connected to: ${peerNickname || conn.peer}`, true);
+          document.getElementById("username-header").textContent = `with ${peerNickname || conn.peer}`;
+          document.getElementById("username-header").classList.remove("hidden");
           document
             .getElementById("file-transfer-header")
             .classList.remove("hidden");
@@ -640,9 +642,9 @@
             peerNickname = decodeURIComponent(senderNickname);
             updatePeerNickname();
           }
+          document.getElementById("remote-id").value = connectToPeer;
           // Wait for peer to be ready before connecting
           peer.on("open", () => {
-            document.getElementById("remote-id").value = connectToPeer;
             connect();
           });
         }
@@ -671,6 +673,9 @@
         const statusText = document.getElementById("status-text");
         if (conn && conn.open) {
           statusText.textContent = `Connected to: ${peerNickname || conn.peer}`;
+          document.getElementById("username-header").textContent = `with ${peerNickname || conn.peer}`;
+        } else {
+          statusText.textContent = `Ready to connect`;
         }
       }
 
@@ -702,6 +707,7 @@
           if (nickname) {
             localStorage.setItem("userNickname", nickname);
             document.getElementById("nickname-input").value = nickname;
+            window.location.reload();
             return nickname;
           }
         } else {
