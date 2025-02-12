@@ -119,11 +119,12 @@
             <div id="qrcode" class="flex justify-center"></div>
 
             <div class="text-center mt-2">
-              <i class="text-xs text-gray-400">Show this QR code to your friend to connect to your Peer ID.</i>
+              <i class="text-xs text-gray-400"
+                >Show this QR code to your friend to connect to your Peer ID.</i
+              >
+            </div>
+            <div class="divider"></div>
           </div>
-          <div class="divider"></div>
-
-        </div>
 
           <!-- Connection Input -->
           <div class="mb-6">
@@ -571,10 +572,13 @@
           Swal.fire({
             icon: "info",
             title: "Connection Closed",
-            text: "The connection has been closed.",
+            text: "Your peer has disconnected or the connection was closed.",
             timer: 10000,
             showConfirmButton: false,
           }).then(() => {
+            //clear parameters and reload
+            window.onbeforeunload = null;
+            window.history.replaceState({}, document.title, "/");
             location.reload();
           });
         });
@@ -793,7 +797,40 @@
             height: 500,
           });
 
-          document.getElementById("qrcode-container").classList.remove("hidden");
+          document
+            .getElementById("qrcode-container")
+            .classList.remove("hidden");
+        }
+      }
+      function checkWebRTC() {
+        const support = {
+          getUserMedia: !!navigator.mediaDevices?.getUserMedia,
+          RTCPeerConnection: !!window.RTCPeerConnection,
+          DataChannel:
+            !!window.RTCPeerConnection &&
+            !!RTCPeerConnection.prototype.createDataChannel,
+          WebSocket: !!window.WebSocket,
+        };
+
+        console.log("WebRTC Support:", support);
+
+        if (
+          !support.getUserMedia ||
+          !support.RTCPeerConnection ||
+          !support.DataChannel
+        ) {
+          document.body.innerHTML = ""; // Clear the page
+          Swal.fire({
+            icon: "error",
+            title: "WebRTC Not Supported",
+            text: "Your browser does not support WebRTC. Please try Chrome, Edge, or Firefox.",
+            allowOutsideClick: false,
+            confirmButtonText: "Learn More",
+          }).then(() => {
+            window.location.href = "https://webrtc.org"; // Redirect to WebRTC info
+          });
+        } else {
+          console.log("Your browser supports WebRTC!");
         }
       }
 
@@ -819,6 +856,7 @@
       });
 
       document.addEventListener("DOMContentLoaded", async () => {
+        checkWebRTC();
         await promptForNickname();
         handleUrlParams();
       });
